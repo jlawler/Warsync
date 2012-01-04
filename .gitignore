@@ -1,0 +1,10 @@
+Makefile
+blib/
+build-stamp
+configure-stamp
+debian/files
+debian/warsync.debhelper.log
+debian/warsync.substvars
+debian/warsync/
+gitignore
+pm_to_blib
