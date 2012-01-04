@@ -1071,7 +1071,7 @@ sub replicate_filepack
         'warsyncXXXXXXXX', DIR => File::Spec->tmpdir, UNLINK => 1
     );
 
-    my ($tmpfn) = $unsafe_tmpfn =~ /([\/0-9A-Za-z]*warsync[0-9A-Za-z]{8})/;
+    my ($tmpfn) = $unsafe_tmpfn =~ /([\/0-9A-Za-z]*warsync[0-9A-Za-z_]{8})/;
 
     die "strange tmpfn $unsafe_tmpfn != $tmpfn"
         unless $tmpfn eq $unsafe_tmpfn;
