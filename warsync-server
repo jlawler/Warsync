@@ -1,0 +1,130 @@
+#!/usr/bin/perl -T
+
+##############################################################################
+## warsync-server - Warsync Server                                          ##
+##                                                                          ##
+## Copyright (C) 2001-2004 Paul J. Baker                                    ##
+##                                                                          ##
+## This program is free software; you can redistribute it and/or modify     ##
+## it under the terms of the GNU General Public License version 2 as        ##
+## published by the Free Software Foundation.                               ##
+##                                                                          ##
+## This program is distributed in the hope that it will be useful,          ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of           ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            ##
+## GNU General Public License for more details.                             ##
+##                                                                          ##
+## You should have received a copy of the GNU General Public License        ##
+## along with this program; if not, write to the Free Software              ##
+## Foundation, Inc., 59 Temple Place - Suite 330, Boston,                   ##
+## MA 02111-1307, USA.                                                      ##
+##                                                                          ##
+## You may contact the author via electronic mail at warsync@paulbaker.net  ##
+##############################################################################
+
+## $Id: warsync-server 162 2005-11-05 01:43:07Z pbaker-guest $
+
+=head1 NAME
+
+B<warsync-server> - Warsync Server
+
+=head1 SYNOPSIS
+
+B<warsync-server>
+
+=head1 DESCRIPTION
+
+B<warsync-server> is a program that speaks the server side of Warsync
+communication to stdout and expects client requests from stdin. B<warsync-server>
+is not intended to be called directly, but from sshd(8) using ssh key
+forced-commands.
+
+=head1 SEE ALSO
+
+warsync(8)
+
+=head1 AUTHOR
+
+Paul Baker, pbaker@where2getit.com
+
+=cut
+
+use warnings;
+use strict;
+
+use Warsync::Util;
+use Warsync::Server;
+
+$ENV{PATH} = '/usr/bin:/bin:/usr/sbin:/sbin';
+
+$| = 1;
+
+umask 022;
+
+## client should be specified on real command line.
+my $client = shift @ARGV;
+
+## read incoming warsync command.
+my $rpc  = $ENV{SSH_ORIGINAL_COMMAND};
+my $host = $ENV{SSH_CLIENT};
+
+exit(2) unless $client && $rpc && $host;
+
+## check for log directory.
+unless (-d '/var/log/warsync') {
+    system('mkdir', '-p', '-m', '750', '/var/log/warsync');
+}
+## log command and ip.
+open (my $log, '>> /var/log/warsync/server.log')
+    or die "could not append to server log: $!";
+(my $log_rpc = $rpc) =~ s/\s+/ /g;
+print $log join("\t", scalar(localtime), "$client=$host", $log_rpc), "\n";
+close($log);
+
+my $server = Warsync::Server->new()
+    or fault "this is not a warsync server";
+
+## this had better be a warsync command.
+$rpc =~ s/^warsync-//;
+
+## check for compression.
+$rpc =~ s/^compress-//;
+
+## set tty.
+tty($rpc =~ s/^tty-//);
+
+my %options = ();
+## check for other options
+$options{'n'} = $rpc =~ s/^dry-run-//;
+$options{'q'} = $rpc =~ s/^quiet-//;
+
+## special check for verbose
+if (my ($v) = $rpc =~ /^verbose(\d+)-/) {
+    $options{'v'} = $v;
+    $rpc =~ s/^verbose$v-//;
+}
+
+$server->options(\%options);
+
+if ($server->verbose >= 5) {
+    $server->display(5, 's-debug: ', `ssh -V`);
+    foreach my $key (sort keys %ENV) {
+        $server->display(5, "s-debug: ENV $key = $ENV{$key}\n");
+    }
+}
+
+$server->display(4, 's-rpc: ', $ENV{SSH_ORIGINAL_COMMAND}, "\n");
+
+my ($cmd, @args) = split(/ /, $rpc);
+my $method = "rpc_$cmd";
+$method =~ s/[^a-z]/_/g;
+
+$server->display(3, 's-method: ', $method, "\n");
+
+if ($server->can($method)) {
+    $server->$method(@args);
+}
+else {
+    fault "unexpected server command: $cmd";
+}
+exit($server->exit_code);

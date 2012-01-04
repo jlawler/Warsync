@@ -1,0 +1,294 @@
+#!/usr/bin/perl -T
+
+##############################################################################
+## warsync-add-client - Warsync Server Add Client Script                    ##
+##                                                                          ##
+## Copyright (C) 2001-2005 Paul J. Baker                                    ##
+##                                                                          ##
+## This program is free software; you can redistribute it and/or modify     ##
+## it under the terms of the GNU General Public License version 2 as        ##
+## published by the Free Software Foundation.                               ##
+##                                                                          ##
+## This program is distributed in the hope that it will be useful,          ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of           ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            ##
+## GNU General Public License for more details.                             ##
+##                                                                          ##
+## You should have received a copy of the GNU General Public License        ##
+## along with this program; if not, write to the Free Software              ##
+## Foundation, Inc., 59 Temple Place - Suite 330, Boston,                   ##
+## MA 02111-1307, USA.                                                      ##
+##                                                                          ##
+## You may contact the author via electronic mail at warsync@paulbaker.net  ##
+##############################################################################
+
+## $Id: warsync-add-client 173 2006-09-06 22:58:57Z pbaker-guest $
+
+=head1 NAME
+
+B<warsync-add-client> - Warsync Server Add Client
+
+=head1 SYNOPSIS
+
+B<warsync-add-client> S<[options]]> S<I<clientname>>
+
+ Options:
+  --version  display version number
+  --help     display help message
+
+=head1 DESCRIPTION
+
+B<warsync-add-client> adds clients to a Warsync server's list of
+client systems.
+
+=head1 COMMAND SWITCHES
+
+=over 4
+
+=item B<--version>
+
+Display the B<warsync> version number and exit.
+
+=item B<--help>
+
+Display help message.
+
+=back
+
+=head1 FILES
+
+=over 4
+
+=item F</etc/warsync/server.conf>
+
+Warsync server config file.
+
+=item F</root/.ssh/authorized_keys>
+=item F</root/.ssh/known_hosts>
+
+SSH key management files that may be modified during the
+configuration of a Warsync client or server.
+
+=back
+
+=head1 SEE ALSO
+
+warsync(8), warsync-config(8)
+
+=head1 AUTHOR
+
+Paul Baker, warsync@paulbaker.net
+
+=cut
+
+## $Id: warsync-add-client 173 2006-09-06 22:58:57Z pbaker-guest $
+
+## PFARS INSTALL SCRIPT
+
+use strict;
+use warnings;
+
+$ENV{PATH} = '/usr/bin:/bin:/usr/sbin:/sbin';
+
+use Warsync::Util;
+use Warsync::Server;
+
+## make sure umask is correct.
+umask 022;
+
+## autoflush everything
+$| = 1;
+
+my $server = Warsync::Server->new
+    or fault "this is not a Warsync server or you are not running as root.";
+
+$server->parse_cli_params;
+
+$server->display(1,
+    "## Add Warsync Client ###########################################\n\n");
+
+sub do_client_connect
+{
+    my $client = shift;
+
+    my $ssh_h = $client->command('echo-name');
+
+    my @scom = <$ssh_h>;
+
+    close($ssh_h);
+
+    if ($scom[0]) {
+        my ($name) = $scom[0] =~ /^name: (\S+)/;
+        return $name;
+    }
+    return undef;
+}
+
+my $client_name = is_fqdn(shift @ARGV);
+
+for (;;) {
+
+    last if $client_name;
+    my $ask_client_name = <<EOF;
+This program adds Warsync Client systems to your Warsync Server. A Warsync Client can not fully communicate with a Warsync Server until it has been added using this command.
+
+What is the name of the client you would like to add?
+EOF
+
+    my $new_name = prompt(
+        prompt => $ask_client_name
+    );
+
+    $client_name = is_fqdn($new_name);
+}
+
+## get client object.
+my $client = Warsync::Server::Client->new($server, $client_name);
+## set default fqdn.
+$client->fqdn($client_name) unless $client->fqdn;
+
+my $try_again = 0;
+
+## need to determine the f.q.d.n. of the client.
+for (;;) {
+
+    my $ask_fqdn = <<EOF;
+Warsync needs to know the F.Q.D.N (fully qualified domain name) or IP address of the client to be added.
+
+What is the F.Q.D.N or IP address that should be used for the server to connect to $client_name?
+EOF
+
+    my $new_fqdn = prompt(
+        prompt  => $ask_fqdn,
+        default => $client->fqdn
+    );
+
+    $client->fqdn($new_fqdn);
+
+    my $ask_port = <<EOF;
+Warsync needs to know the port of the SSH server running on $client_name? By default SSH listens on port 22.
+
+What port is $client_name\'s SSH server listening on?
+EOF
+
+    my $new_port = prompt(
+        prompt  => $ask_port,
+        default => $client->port
+    );
+
+    $client->port($new_port);
+
+    my $ask_comp = <<EOF;
+Warsync can compress the communication between server and client. This will slow down performance if the server and client are on the same network, but will improve performance when the communicating across the Internet.
+
+Would you like to enable compression for this client?
+EOF
+
+    my $new_comp = prompt(
+        prompt  => $ask_comp,
+        choices => [ 'n', 'y' ],
+        default => $client->compress ? 'y' : 'n',
+    );
+
+
+    $client->compress($new_comp eq 'y' ? 1 : 0);
+
+    my $fqdn = $client->fqdn;
+    my $port = $client->port;
+
+    $server->display(1, "Connecting to $fqdn:$port...");
+
+    my $name = do_client_connect($client);
+
+    ## if the claimed client name matches what we are expecting,
+    ## then continue on to the next step.
+    if ($name and $name eq $client_name) {
+        $server->display(1, "successful.\n");
+        last;
+    }
+
+    ## we connected to a warsync client, but it returned a different name.
+    if ($name and $name ne $client_name) {
+        my $different_client_name = <<EOF;
+
+You specified '$client_name' as the name for the client to add. When connecting to $fqdn:$port, the system claims to be named '$name'.
+
+Is this expected?
+EOF
+
+        my $res = prompt(
+            prompt => $different_client_name,
+            choices => [ 'n', 'y' ],
+        );
+        ## continue on if you don't care about the name difference.
+        last if $res eq 'y';
+    }
+
+    ## no name means no connection.
+    else {
+
+        print <<EOF;
+
+Connection to $client_name could not be established. The address $fqdn:$port is either unreachable or the system has not yet been configured as a Warsync Client.
+EOF
+
+    }
+
+    my $ask_try_again = <<EOF;
+
+Would you like to try again supplying a different connection information?
+EOF
+
+    my $res = prompt(
+        prompt => $ask_try_again,
+        choices => [ 'y', 'n' ],
+    );
+
+    if ($res eq 'n') {
+        print <<EOF;
+
+The $client_name client can not be added until a connection has been established. Please make sure that $client_name is properly configured and reachable over SSH. Then try again later by running:
+
+  warsync-add-client $client_name
+
+EOF
+        exit;
+    }
+
+    $try_again = 1;
+}
+
+$client->integrity_check;
+
+{
+    my $ask_skip = <<EOF;
+When adding a client for the first time it is often a good idea to configure this client so it is skipped by default since the first replication of a client can be time consuming. If you have any cronjobs that run Warsync periodically to sync your cluster, the jobs can be delayed when trying to do a full sync of the new client unexpected. The new client can be warsync'd explicitly by specifying --client=$client_name command line argument when calling warsync. Once the client has been fully synced it is safe to turn off the "skip" option.
+
+Would you like this client to be skipped by default?
+EOF
+
+    my $old_skip = defined $client->skip ? $client->skip : 1;
+
+    my $new_skip = prompt(
+        prompt  => $ask_skip,
+        choices => [ 'y', 'n' ],
+        default => $old_skip ? 'y' : 'n',
+    );
+
+
+    $client->skip($new_skip eq 'y' ? 1 : 0);
+}
+
+$server->config->write;
+
+#print "done.\n";
+
+$server->display(1, <<EOF);
+
+$client_name has been added to this server. To replicate this client now, execute:
+
+  warsync --client=$client_name
+
+EOF
+
+exit($server->exit_code);

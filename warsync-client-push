@@ -1,0 +1,128 @@
+#!/usr/bin/perl -T
+
+##############################################################################
+## warsync-client-push - Warsync Client                                     ##
+##                                                                          ##
+## Copyright (C) 2001-2004 Paul J. Baker                                    ##
+##                                                                          ##
+## This program is free software; you can redistribute it and/or modify     ##
+## it under the terms of the GNU General Public License version 2 as        ##
+## published by the Free Software Foundation.                               ##
+##                                                                          ##
+## This program is distributed in the hope that it will be useful,          ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of           ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            ##
+## GNU General Public License for more details.                             ##
+##                                                                          ##
+## You should have received a copy of the GNU General Public License        ##
+## along with this program; if not, write to the Free Software              ##
+## Foundation, Inc., 59 Temple Place - Suite 330, Boston,                   ##
+## MA 02111-1307, USA.                                                      ##
+##                                                                          ##
+## You may contact the author via electronic mail at warsync@paulbaker.net  ##
+##############################################################################
+
+## $Id: warsync-client-push 162 2005-11-05 01:43:07Z pbaker-guest $
+
+=head1 NAME
+
+B<warsync-client-push> - Warsync Client
+
+=head1 SYNOPSIS
+
+B<warsync-client-push>
+
+=head1 DESCRIPTION
+
+B<warsync-client-push> is a program that speaks the client side of Warsync
+communication to stdout and expects server push requests from stdin.
+B<warsync-client-push> is not intended to be called directly, but from sshd(8)
+using ssh key forced-commands.
+
+=head1 SEE ALSO
+
+warsync(8)
+
+=head1 AUTHOR
+
+Paul Baker, pbaker@where2getit.com
+
+=cut
+
+use strict;
+use warnings;
+
+use Warsync::Client;
+use Warsync::Util;
+
+$ENV{PATH} = '/usr/bin:/bin:/usr/sbin:/sbin';
+
+$| = 1;
+
+umask 022;
+
+## read incoming warsync command.
+my $rpc  = $ENV{SSH_ORIGINAL_COMMAND};
+my $host = $ENV{SSH_CLIENT};
+
+exit(2) unless $rpc && $host;
+
+## check for log directory.
+unless (-d '/var/log/warsync') {
+    system('mkdir', '-p', '-m', '750', '/var/log/warsync');
+}
+## log command and ip.
+open (my $log, '>> /var/log/warsync/client-push.log')
+    or fault "could not append to client-push log: $!";
+(my $log_rpc = $rpc) =~ s/\s+/ /g;
+print $log join("\t", scalar(localtime), $host, $log_rpc), "\n";
+close($log);
+
+my $client = Warsync::Client->new()
+    or fault "this is not a warsync client";
+
+## drop warsync prefix if it exists.
+$rpc =~ s/^warsync-//;
+
+## check for compression.
+$client->compress($rpc =~ s/^compress-//);
+
+## set tty.
+tty($rpc =~ s/^tty-//);
+
+my %options = ();
+## check for other options
+$options{'n'} = $rpc =~ s/^dry-run-//;
+$options{'q'} = $rpc =~ s/^quiet-//;
+
+## special check for verbose
+if (my ($v) = $rpc =~ /^verbose(\d+)-/) {
+    $options{'v'} = $v;
+    $rpc =~ s/^verbose$v-//;
+}
+
+$client->options(\%options);
+
+if ($client->verbose >= 5) {
+    $client->display(5, 'c-debug: ', `ssh -V`);
+    foreach my $key (sort keys %ENV) {
+        $client->display(5, "c-debug: ENV $key = $ENV{$key}\n");
+    }
+}
+
+$client->display(4, 'c-rpc: ', $ENV{SSH_ORIGINAL_COMMAND}, "\n");
+
+my ($cmd, @args) = split(/ /, $rpc);
+my $method = "rpc_$cmd";
+$method =~ s/[^a-z]/_/g;
+
+$client->display(3, 'c-method: ', $method, "\n");
+
+if ($client->can($method)) {
+    $client->$method(@args);
+}
+else {
+    fault "unexpected client command: $cmd";
+}
+exit($client->exit_code);
+

@@ -1,0 +1,562 @@
+WARSYNC v0.9.9
+    Warsync is the program that initiates replication between the Warsync
+    server and it's clients. Warsync is designed to be called from the
+    command line of the Warsync server to initiate replication on demand. It
+    can also be called from cron on the server to automate replication.
+
+    Warsync not only replicates files from the server to the client, but can
+    also synchronize what software packages are installed on a Debian
+    GNU/Linux system.
+
+    Warsync determines what files to replicate by processing the
+    /etc/warsync/filepacks.d directory on the server. This directory
+    contains *filepacks* which are simple text files that contain lists of
+    the files and directories that should be replicated.
+
+Download
+    Warsync can be downloaded from the Warsync Alioth project page at
+    <http://alioth.debian.org/projects/warsync/>
+
+    It is available as a Debian package (.deb) and as a source tarball
+    (.tar.gz)
+
+    It is also available as an apt-get source using the following entry:
+
+     deb http://givetheworld.net/debian sarge warsync
+     deb-src http://givetheworld.net/debian sarge warsync
+
+Install
+    On a Debian GNU/Linux system, the best way to install Warsync is to add
+    the apt sources lines above to your /etc/apt/sources.list file. You can
+    then be able to install Warsync with the following commands:
+
+     apt-get update
+     apt-get install warsync
+
+    Alternatively you can download the Debian package directly and install
+    it with dpkg.
+
+     dpkg -i warsync_0.9.9_all.deb
+
+    If you receive an error about missing dependencies, a quick call to
+    apt-get will fix that up.
+
+     apt-get -f install
+
+    On other Linux distributions, or if you are a glutton for punishment,
+    Warsync can also be installed manually from the source tarball.
+    Although, this method has not been tested. A from source installation
+    would go something like this:
+
+     tar zxvf warsync_0.9.9.tar.gz
+     cd warsync-0.9.9
+     perl Makefile.PL
+     make
+     make install
+
+Warsync Configuration
+    First configure the Warsync server by executing the following command on
+    the system that will serve as the Warsync server.
+
+     warsync-config --server
+
+    Next configure Warsync clients by executing the following command on
+    each Warsync client.
+
+     warsync-config --client
+
+    Back on the Warsync server, execute the following command to fully
+    register each client system with the server.
+
+     warsync-add-client clientname
+
+    After this you will need to create *filepacks* in the
+    /etc/warsync/filepacks.d directory on the Warsync server. Each filepack
+    should contain a list of directories or files to be replicated when the
+    filepack name is specified on the warsync command line.
+
+Filepacks
+    Filepack should list each file or directory pattern to be replicated one
+    per line. It is best to have several filepacks where each filepack
+    replicates a group of related files and directories. For instance you
+    may have one filepack called homes that will replicate user home
+    directories. You could have another filepack called website that will
+    replicate the files for your website. Another filepack called config
+    could be used to copy configuration or "/etc" files that you want to
+    keep replicated between server and client.
+
+    To match a file, specify the full absolute path to the file. For
+    example, "/etc/passwd". Wildcards "?" and "*" may also be specified. "?"
+    matches any single character, while "*" will match zero or more
+    characters. For example, "/etc/pa*" could match "/etc/pam.conf" and
+    "/etc/passwd".
+
+    To replicate a directory and all it's subdirectories, specify two
+    asterisk, "**" after the directory name. For example "/home/**" will
+    replicate everything in the "/home" directory. If only one asterisk is
+    specified, then only the files directly contained in the directory will
+    be replicated. The subdirectories will not be replicated.
+
+    To exclude files from being replicated that would match the wild card in
+    another entry, specify them on line before the include line. It should
+    start with "- " (a minus followed by a space). For example,
+    "- /etc/network/interfaces" followed by "/etc/network/**" would
+    replicate all files and subdirectories contained in the "/etc/network"
+    directory, except the "interfaces" file.
+
+    Filepacks may also contain comments and are signified when the first
+    non-whitespace character on a line is a "#".
+
+    An example homes filepack could look like:
+
+     # replicate home directories.
+     /home/**
+     # replicate root's home, but not it's .ssh directory
+     # otherwise warsync will probably break.
+     - /root/.ssh
+     /root/**
+
+    Example website filepack could be as simple as:
+
+     /var/www/**
+
+    A config filepack for replicating config files could look like:
+
+     # copy user info
+     /etc/passwd
+     /etc/shadow
+     /etc/group
+     /etc/gshadow
+     /etc/skel/**
+     # ssh config
+     - /etc/ssh/ssh_host_dsa_key*
+     - /etc/ssh/ssh_host_rsa_key*
+     /etc/ssh/**
+
+    Some directories that you probably never want to completely replicate
+    any top level directories, especially /boot, /cdrom, /dev, /floppy,
+    /initrd, /lost+found, /mnt, /proc, /tmp, and /var. You also probably
+    shouldn't replicate /bin, /lib, /sbin, or /usr as these directories
+    should be managed by your operating systems package management system.
+    Although replicating /usr/local shouldn't hurt. While you may want to
+    replicate some of the files in /etc, you definitely do NOT want to
+    replicate them all. Also replicating the /etc/warsync directory will
+    break configuration on the clients. The following directories are
+    sensitive to warsync's operation and should not be replicated unless you
+    absolutely know what you are doing:
+
+     /etc/warsync
+     /etc/ssh
+     /root/.ssh
+     /var/log/warsync
+
+    Warsync makes no effort to keep you from replicating things you that you
+    shouldn't. A good rule of thumb is to be very explicit about what to
+    replicate and use fewer wildcards rather than more. And if you don't
+    know what a file does, don't replicate it.
+
+Running Warsync
+    To replicate a single filepack, specify it on the warsync command line
+    like so:
+
+     warsync foobar
+
+    The above command will replicate the files and directories specified in
+    /etc/warsync/filepacks.d/foobar file pack. Multiple filepacks can be
+    specified at once to replicate several filepacks one after the other:
+
+     warsync homes website
+
+    This would replicate the homes filepack, and then the website file pack.
+
+    To replicate all filepacks, specify "--all-filepacks" on the command
+    line:
+
+     warsync --all-filepacks
+
+    You can also use "-a" for short to replicate all filepacks:
+
+     warsync -a
+
+    If you want to test a filepack to see what will be replicated before
+    actually making any real live changes, you can specify "--dry-run" on
+    the command line:
+
+     warsync --dry-run config
+
+    This will simulate replication of the config filepack. You can also use
+    "-n" for short instead of "--dry-run".
+
+     warsync -n foobar
+
+    If you want to see more verbose output about what is happening then
+    specify "--verbose" on the command line:
+
+     warsync --verbose homes
+
+    You can also specify "-v" as a shortcut. To see even more output, you
+    can specify multiple "v"'s like so:
+
+     warsync -vv config
+
+    And of course this can be combined with "-n" to simulate a replication
+    with extra output:
+
+     warsync -vn --all-filepacks
+
+    To completely limit the output produced by warsync so that it will only
+    display output if an error occurs, add "--quiet" to the command line:
+
+     warsync --quiet homes
+
+    And of course "--quiet" can be shortened to just "-q" as in:
+
+     warsync -q foobar
+
+    By default warsync will replicate specified filepacks to all clients. If
+    you only want to replicate to a specific warsync client, you can specify
+    the "--client" option on the warsync command line;
+
+     warsync --client=web2 website
+
+    The above command would replicate the website filepack to only the
+    client named web2. More than one client can be specified at a time by
+    using multiple "--client" options:
+
+     warsync --client=web2 --client=web9 website
+
+    Warsync can also synchronize the software packages installed on Debian
+    GNU/Linux systems. The Debian package synchronization will install,
+    remove, upgrade, and/or *downgrade* the Debian packages on a Warsync
+    client in order to match the packages installed on the server.
+
+    To synchronize the Debian packages installed on the client with those on
+    the server, specify the "--debian" option on the warsync command line.
+
+     warsync --debian
+
+    If "--debian" is specified along with filepacks, the filepacks will be
+    replicated first before doing the Debian package synchronization.
+
+    Warsync can also be used to take a snapshot of installed Debian packages
+    and then later used to "restore" back to this state. This comes in handy
+    if you want to install a package that requires several libraries that
+    you don't want to leave installed if you later decide to remove the
+    package. Prior to installing the new package, take a snapshot of
+    installed Debian packages by executing:
+
+     warsync --debian-snapshot=debsnap
+
+    This will write the snapshot to the debsnap file in the current
+    directory. Later when you want to restore back to package state, run the
+    command:
+
+     warsync --debian-from-snapshot=debsnap
+
+    The debsnap file can also be copied to another system with Warsync
+    installed to install the same packages on another system.
+
+Automating Warsync Via Cron
+    Warsync can be comfortably run from a crontab for filepack replication.
+    In fact warsync does special handling when it is not run from a tty,
+    such as when run from cron, and will not display any output unless
+    changes are made, or "-v" has been specified on the command line. In
+    this fashion, when warsync runs from cron, you will not receive a cron
+    email unless changes were actually made on the server. This helps to cut
+    down on the noise level if you want to run warsync periodically through
+    out the day, but only want to receive a notification when a change was
+    made. If you always want to receive output even when no changes were
+    made, specify "-v" on the warsync command line in the crontab. If you
+    want to receive no output at all, specify "-q" on the command line. In
+    this case you will only receive an email if there was an error.
+
+    It should be noted that running Warsync from cron to do Debian package
+    synchronization has not been extensively tested and should be considered
+    experimental. This is mainly because when a new package is installed or
+    upgraded, you may be prompted to answer configuration questions, which
+    can yield unpredictable results when running from cron.
+
+    Because warsync can replicate individual filepacks at a time, it is
+    beneficial to put multiple cron entries that replicate different
+    filepacks throughout the day. For instance, you might want to
+    automatically replicate changes to the website every thirty minutes, but
+    only replicate user home directories every two hours. And you may want
+    to do a full replication every night at 11 o'clock. In that case you
+    might have a crontab that looks like this:
+
+     15,45 * * * * /usr/sbin/warsync website
+     30 */2 * * * /usr/sbin/warsync homes
+     0 23 * * * /usr/sbin/warsync -a
+
+    Of course it might get pretty annoying to get emailed about every single
+    change made to users' home directories. To quiet the noise, you'll want
+    to change the second crontab line as shown below.
+
+     30 */2 * * * /usr/sbin/warsync -q homes
+
+Advanced Configuration
+    For those of you that really want to get the most out of Warsync, there
+    are some advanced configuration options you can specify in the
+    server.conf file and within filepacks.
+
+  server.conf Options
+    While filepacks tell Warsync *what* to replicate, the server.conf file
+    tells Warsync *where* and *how* to perform its replication. The
+    server.conf file stores the list of Warsync clients and different
+    options that apply to each individual client. The server.conf file uses
+    the INI config style that is prevalent on Microsoft Windows and also
+    used in MySQL. Each client's config is started off with a config
+    grouping line in the form of "[client-*clientname*]". Then each
+    "name=value" line afterwards is applied to the client until the next
+    config group line is reached. Comments may be included in the
+    server.conf just like in filepacks. Comments are preceeded by "#"
+    character.
+
+    A typical server.conf might look like this:
+
+     [client-web2]
+     fqdn = web2.mydomain.com
+     port = 22
+     compress = 0
+     skip = 0
+ 
+     [client-web3]
+     fqdn = web3.mydomain.com
+     port = 22
+     compress = 0
+     skip = 0
+
+    The above config file lists to Warsync clients, web2 and web3. It also
+    specifies their fully-qualified domain names, what port to connect over
+    for ssh, that compression should not be used, and neither one is skipped
+    by default. These four options are configured whenever you run
+    warsync-add-client clientname. When you run that command, it will ask
+    you questions for each of these four options and set them appropriately
+    in the server.conf file. The warsync-add-client script is very well
+    behaved and will even preserve any other options and comments that may
+    have been entered into the server.conf file by hand. Allowed server.conf
+    options are detailed below:
+
+    fqdn
+        This is the fully qualified domain name (FQDN) of the client that
+        the Warsync server should use when contacting the client. An IP
+        address may be used instead of a FQDN if desired.
+
+    port
+        This is the port that Warsync should use to connect to the SSH
+        server on the client. Default is 22.
+
+    compress
+        This specifies whether to use compression when communicating with
+        the client when a true value is used. Compression will most likely
+        speed things up if your server and client are separated across the
+        Internet. Using compression on a LAN will most likely slow things
+        down. Default is 0 (disabled).
+
+    skip
+        By default, when running warsync all clients are replicated if not
+        clients are specified specifically on the command-line using the
+        "--client" option. Any client configs that have "skip" set to a true
+        value (1) will be skipped when running warsync without explicitly
+        specifying the client on the command-line. Default 0 (not skipped).
+
+    ignore_debs
+        The "ignore_debs" option can be used to specify a space delimited
+        list of Debian packages that should be unchanged during Debian
+        package synchronization. Package names will be matched as Perl
+        regular-expressions. So specifying "vi" would ignore all packages
+        that contain the string "vi" any part of the name such as: "vim",
+        "nvi", "sysvinit", "kivio", etc. If you want to match a string
+        exactly, prefix it with a "^" and end it with a "$" such as: "^vi$"
+
+    dot_warsyncignore
+        This long option name provides introduces some very cool
+        functionality to Warsync. When "dot_warsyncignore" is set to a true
+        value (ex: 1), before the server replicates a filepack, it will scan
+        the client for .warsyncignore files. This allows you to place
+        .warsyncignore files anywhere on the client to tell warsync software
+        not to replicate a particular directory or individual files within
+        it. .warsyncignore files work very much like .cvsignore files if you
+        are familiar with those. They also have an extra feature, that if
+        you put a single . on a line in the file, then the entire directory
+        *containing* the .warsyncignore file will be ignored. This ability
+        works very well if you want to have your development environment
+        replicate off of your production environment. You can temporarily
+        place .warsyncignore files in directories contain the changes you
+        are testing in development. Once you are done testing you can remove
+        the .warsyncignore files and then everything will be fully
+        replicated with production the next time you run Warsync. For
+        example perhaps you are testing changes you have made to the
+        index.html file for your website. In your web directory place a
+        .warsyncignore file that simple contains:
+
+         ## don't replicate index.html for now
+         index.html
+
+        Then whenever that directory is Warsync'd, the index.html will be
+        untouched. If you wanted to temporarily keep your entire web
+        directory from being changed then you would create a .warsyncignore
+        file like so:
+
+         ## don't replicate anything in this directory
+         .
+
+        As you can see, just like in filepacks and the server.conf you can
+        specify comments with the "#" character.
+
+        The use of .warsyncignore files is an important and useful feature
+        of Warsync. While filepacks are configured on the server and
+        primarily tell Warsync what *to* replicate, .warsyncignore files are
+        placed on individual clients and tell Warsync what *not to*
+        replicate. Cool indeed.
+
+    rsync_opt
+        If you want to specify particular options to use when rsync is used
+        for a particular client for all filepacks, you can specify it using
+        the "rsync_opt" option in server.conf. This could be used for
+        instance if you wanted to limit the bandwidth throughput used when
+        replicating to a particular client. You could specify:
+
+         rsync_opt = --bwlimit=40
+
+        That would limit the bandwidth rsync uses to 40 KBytes per second.
+        Multiple rsync options should be specified on the same line.
+
+         rsync_opt = --delay-updates --bwlimit=40 --partial
+
+  Filepack Options
+    When processing a filepack, Warsync recognizes a few options that change
+    its behavior when processing a filepack. Filepack options are specified
+    one on each line in the form of:
+
+     name = value
+
+    There are currently five supported warsync options: "delete",
+    "rsync_opt", "mod_cmd", "pre_cmd", and "post_cmd". Filepack options are
+    case-insensitive, so you may write them in upper-case for clarity.
+
+    delete
+        By default Warsync will delete files from clients that do not exist
+        on the server when a filepack is replicated. If you would like files
+        to always be left on the client even though they do not exist on the
+        server, specify "delete=0" in your filepack.
+
+    rsync_opt
+        If there are any extra rsync command-line parameters used Warsync
+        uses rsync to replicate a filepack, you can specify them using the
+        "rsync_opt" option in a filepack. You may use multiple "rsync_opt"
+        lines in a filepack if you want to pass more than one option to
+        rsync, or you can specify options on one line. Examples:
+
+         rsync_opt = --omit-dir-times
+         rsync_opt = --checksum
+
+        Is the same as:
+
+         RSYNC_OPT = --omit-dir-times --checksum
+
+    mod_cmd
+        The "mod_cmd" option is used to specify a command to run *on the
+        client* if any modifications where made while replicating the
+        filepack. The command will run after the filepack has finished
+        replicating any changes needed for the filepack. Multiple "mod_cmd"
+        lines may exist. They will be run one after the other in the order
+        they are specified in the filepack. If no files or directories where
+        added, modified, or deleted the command will not be run. This is
+        useful, for instance, if you group the config files for a particular
+        application into a filepack, you can have a "mod_cmd" that restarts
+        the application if the config files have changed. Here is an example
+        filepack that restarts Apache if the Apache config files were
+        changed:
+
+         RSYNC_OPT = --omit-dir-times
+         MOD_CMD = /usr/sbin/apachectl configtest && /etc/init.d/apache reload
+         /etc/apache/**
+         /etc/init.d/apache
+
+        In the above example, the /etc/apache directory and contents will be
+        replicated along with the SYSV init script /etc/init.d/apache. If
+        any of those files change, the /usr/sbin/apachectl configtest
+        command will run which will make sure that a bad config hasn't been
+        replicated and will then reload Apache if the config was good using
+        the /etc/init.d/apache init script.
+
+        The mod_cmd also supports some basic printf style substitution. The
+        following substitutions will be made:
+
+         %s   server name
+         %c   client name
+         %f   filepack
+         %%   % character
+
+        Here is a fairly useless example showing some of these substitutions
+        in use:
+
+         mod_cmd = echo Something changed replicating %f from %s to %c
+
+        The above "mod_cmd" would simply print out the message "Something
+        changed replicating filepackname from servername to clientname".
+
+        If a "mod_cmd" returns with an error code, all further replication
+        will stop and an error message will be displayed specifying what
+        error code was received.
+
+    pre_cmd
+        The "pre_cmd" option works just like "mod_cmd" except that it always
+        runs and it runs *before* any changes have been made to files on the
+        client.
+
+    post_cmd
+        The "post_cmd" option is similar to "pre_cmd" in that it always
+        runs, but it runs after any file replication has taken place, and
+        after any "mod_cmd"'s.
+
+    skip
+        The "skip" option does for filepacks what the server.conf "skip"
+        option does for Warsync clients. If set to true (1) in a filepack,
+        that filepack will be skipped when using the --all-filepacks
+        command-line parameter.
+
+About the Author
+    Paul Baker has been developing applications in Perl since 1997. He also
+    maintained the popular ClanRing Quake Mod
+    <<http://planetquake.com/crmod/>> from 1997 to 1999. Paul has been a
+    full time Perl developer and sysadmin since 2000. In 2001, Paul began
+    the PFARS <<http://pfars.sourceforge.net/>> project on SourceForge which
+    aimed to be a useable cluster/server replication system. Warsync was
+    started by Paul in 2004 as a complete rewrite of PFARS from the ground
+    up.
+
+    Special Thanks to FeedBurner <<http://www.feedburner.com/>> employing
+    Paul Baker and paying his bills while working on Warsync since 2006.
+    Special thanks to Where2GetIt <<http://www.where2getit.com/>> for
+    sponsoring the work of PFARS and Warsync from 2001-2005. Thanks go to
+    Steve Johnson for helping to test Warsync. Thanks to Vijay Avarachen for
+    writing the HOWTO for PFARS that I never got around to including on the
+    PFARS website and also for the idea of doing Debian package *version*
+    synchronization. And finally thanks to Kurt Stephens for coming up with
+    the name Warsync which is so many times better than PFARS.
+
+Copyright
+    Warsync - Wrapper Around Rsync v0.9.9
+
+    Copyright (C) 2001-2006 Paul J. Baker
+
+    This program is free software; you can redistribute it and/or modify it
+    under the terms of the GNU General Public License version 2 as published
+    by the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful, but
+    WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+    Public License for more details.
+
+    You should have received a copy of the GNU General Public License along
+    with this program; if not, write to the Free Software Foundation, Inc.,
+    59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+    You may contact the author via electronic mail at
+    "pauljbaker -at- mac.com".
+
+    $Rev: 167 $ $Date: 2006-02-24 10:02:36 -0800 (Fri, 24 Feb 2006) $
+

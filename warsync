@@ -1,0 +1,244 @@
+#!/usr/bin/perl -T
+
+##############################################################################
+## warsync - Wrapper Around Rsync                                           ##
+##                                                                          ##
+## Copyright (C) 2001-2006 Paul J. Baker                                    ##
+##                                                                          ##
+## This program is free software; you can redistribute it and/or modify     ##
+## it under the terms of the GNU General Public License version 2 as        ##
+## published by the Free Software Foundation.                               ##
+##                                                                          ##
+## This program is distributed in the hope that it will be useful,          ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of           ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            ##
+## GNU General Public License for more details.                             ##
+##                                                                          ##
+## You should have received a copy of the GNU General Public License        ##
+## along with this program; if not, write to the Free Software              ##
+## Foundation, Inc., 59 Temple Place - Suite 330, Boston,                   ##
+## MA 02111-1307, USA.                                                      ##
+##                                                                          ##
+## You may contact the author via electronic mail at warsync@paulbaker.net  ##
+##############################################################################
+
+## $Id: warsync 173 2006-09-06 22:58:57Z pbaker-guest $
+
+=head1 NAME
+
+B<warsync> - Wrapper Around Rsync
+
+=head1 SYNOPSIS
+
+B<warsync> S<[options]> S<[I<filepack filepack ...>]>
+B<warsync> S<[options]> S<--debian-snapshot=I<FILE>>
+B<warsync> S<[options]> S<--debian-from-snapshot=I<FILE>>
+
+ Options:
+  -a, --all-filepacks    replicate all filepacks
+      --client=NAME      only replicate client NAME
+      --debian           perform debian package replication
+      --check-clients    test server/client communications
+      
+  -i, --include-skipped-filepacks
+                         include filepacks that have skip
+			             option when using --all-filepacks
+			 
+  -m, --skip-mod-cmds    will skip filepack mod_cmd's
+      --skip-pre-cmds    will skip filepack pre_cmd's
+      --skip-post-cmds   will skip filepack post_cmd's
+      --skip-cmds        will skip all filepack commands
+
+  -t, --timestamp        prefix output with current time
+  -v, --verbose          increase verbosity
+  -q, --quiet            quiet output
+  -n, --dry-run          show what would have been done
+      --version          display version number
+      --help             display help message
+
+      --debian-snapshot=FILE
+                         writes snapshot of debian package
+                         installations to FILE
+      --debian-from-snapshot=FILE
+                         installs debian packages based on
+                         snapshot FILE
+      --debian-ignore=REGEX
+                         debian packages to ignore
+      --debian-closest-version
+                         use best available debian packages
+
+=head1 DESCRIPTION
+
+B<warsync> is the program that initiates replication between
+the Warsync server and it's clients. B<warsync> is designed to
+be called from the command line of the Warsync server to initiate
+replication on demand. It can also be called from cron(8) on the
+server to automate replication.
+
+Warsync not only replicates files from the server to the client,
+but can also syncronize the installed Debian packages.
+
+Warsync determines what files to replicate by processing the
+F</etc/warsync/filepacks.d> directory. This directory contains
+I<filepack> files which are simply lists of the files and directories
+that should be replicated when the name of the filepack is specified
+on the B<warsync> command line, or B<--all-filepacks> is specified.
+
+Warsync can also syncronize the Debian packages installed on the client. It
+will install, remove, upgrade, and/or B<downgrade> the Debian packages
+on a client in order to match the packages installed on the server.
+
+=head1 COMMAND SWITCHES
+
+=over 4
+
+=item B<-a>, B<--all-filepacks>
+
+Ordinarily you specify which filepacks to replicate on the B<warsync>
+command-line. Specifying B<--all-filepacks> will cause B<warsync>
+to replicate all filepacks, without having to list each one
+individually on the command-line.
+
+=item B<--client=I<NAME>>
+
+By default B<warsync> will replicate to all clients. Specifying
+B<--client> on the command-line allows to specify a particular
+client to replicate to. Multiple B<--client> options may be given
+at once in order to replicate to more than one specific client.
+
+=item B<--debian>
+
+By default B<warsync> only performs filepack replication. Specify
+B<--debian> on the command-line to also syncronize Debian package
+installation.
+
+=item B<--check-clients>
+
+Iterates through Warsync client list and attempts a loop-back connection
+to each one.
+
+=item B<-i>, B<--include-skipped-filepacks>
+
+Filepacks that contain a true value for the C<skip> option are
+normally skipped when using the C<--all-filepacks> command-line
+parameter. Specifying C<--include-skipped-filepacks> forces those
+filepacks to be included.
+
+=item B<-m>, B<--skip-mod-cmds>
+
+This will force warsync to skip any C<mod_cmd> entries it finds
+in filepacks, even if the files of a filepack have changed and would
+normally trigger them to run.
+
+=item B<--skip-pre-cmds>
+
+This will force warsync to skip any C<pre_cmd> entries it finds
+in filepacks.
+
+=item B<--skip-post-cmds>
+
+This will force warsync to skip any C<post_cmd> entries it finds
+in filepacks.
+
+=item B<--skip-cmds>
+
+This will force warsync to skip all C<mod_cmd>, C<pre_cmd>, and
+C<post_cmd> entries it finds in filepacks. This is equivalent to
+specifying all of the above options at once.
+
+=item B<--debian-snapshot=I<FILE>>
+
+Writes snapshot of the current Debian package installation to
+specified I<FILE>.
+
+=item B<--debian-from-snapshot=I<FILE>>
+
+Installs or removes Debian packages based on Debian package
+installation snapshot contained in I<FILE>.
+
+=item B<--debian-ignore=I<REGEX>>
+
+Used with B<--debian-from-snapshot> to specify packages that should
+be ignored. Value can be a regular expression to match multiple
+packages. B<--debian-from-snapshot> can be specified multiple times.
+
+=item B<--debian-closest-version>
+
+Used wtih B<--debian-from-snapshot> to automatically choose the closest
+possible package version when installing new packages when the version
+specified in the snapshot is not available.
+
+=item B<--accept-unknown-hosts>
+
+When using SSH to communicate with each client, the StrickHostKeyChecking
+option will be set to C<no>. This will cause ssh to automatically add
+client host keys to the F</root/.ssh/known_hosts> file. This is a
+potentially dangerous option and should only be used if you know what
+you are doing. See L<ssh_config(5)>.
+
+=item B<-t>, B<--timestamp>
+
+Prefix each line of output with the current time.
+
+=item B<-v>, B<--verbose>
+
+Increases the verbosity of output given by B<warsync>. May be specified
+multiple times to increase verbosity further.
+
+=item B<-q>, B<--quiet>
+
+Quiets B<warsync>'s output. Nothing will be output except when required
+(i.e. during apt-get install) or when an error occurs.
+
+=item B<-n>, B<--dry-run>
+
+When specified, B<warsync> will simulate the replication process,
+outputting what would happen instead.
+
+=item B<--version>
+
+Displays the B<warsync> version number and exits.
+
+=item B<--help>
+
+Display help message.
+
+=head1 SEE ALSO
+
+warsync-config(8), warsync-add-client(8)
+
+=head1 AUTHOR
+
+Paul Baker, pbaker@where2getit.com
+
+=cut
+
+## be a good perl citizen.
+use strict;
+use warnings;
+
+## we do this to stop taint bitching on system calls.
+$ENV{PATH} = '/usr/bin:/bin:/usr/sbin:/sbin';
+
+use Warsync::Server;
+use Warsync::Client;
+use Warsync::Util;
+
+# autoflush all output.
+$| = 1;
+
+## check if this is a server.
+if (my $server = Warsync::Server->new) {
+    $server->run;
+    exit($server->exit_code);
+}
+## or a client.
+elsif (my $client = Warsync::Client->new) {
+    $client->run;
+    exit($client->exit_code);
+}
+## otherwise we haven't yet been configured.
+else {
+    fault "This is system has not yet been configured or you are not\n",
+          "running as root. Please run warsync-config first.";
+}

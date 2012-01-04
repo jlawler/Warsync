@@ -1,0 +1,24 @@
+COPYING
+MANIFEST
+Makefile.PL
+README
+debian/changelog
+debian/control
+debian/copyright
+debian/dirs
+debian/rules
+lib/Warsync.pm
+lib/Warsync/Client.pm
+lib/Warsync/Config.pm
+lib/Warsync/Event.pm
+lib/Warsync/Host.pm
+lib/Warsync/Server.pm
+lib/Warsync/Util.pm
+t/syntax.t
+warsync
+warsync-add-client
+warsync-client-push
+warsync-config
+warsync-howto.pod
+warsync-server
+META.yml                                 Module meta-data (added by MakeMaker)

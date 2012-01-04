@@ -1,0 +1,17 @@
+Source: warsync
+Section: admin
+Priority: optional
+Maintainer: Paul Baker (w2gi) <pbaker@where2getit.com>
+Standards-Version: 3.5.9
+Build-Depends-Indep: debhelper (>> 3.0.18), perl-modules, libtest-simple-perl
+
+Package: warsync
+Architecture: all
+Depends: perl-modules, ${perl:Depends}, ssh, rsync
+Description: Server replication program based on rsync
+ Warsync - Wrapper Around Rsync - attempts to be a useful replication
+ system for a cluster of debian machines. Warsync replicates files
+ specified in "filepacks". You can then replicate systems by individual
+ filepacks at a time, or you can replicate a full system at once. It
+ also syncronizes Debian package installation on the Warsync server
+ and clients.

@@ -1,0 +1,178 @@
+warsync (0.9.8+rc0.9.9+4) unstable; urgency=low
+
+  * This is version 0.9.9 Release-Candidate 4 and new features may not work as
+    expected.
+  * When replicating all servers, they are now replicated in alphabetic order
+    instead of a seemingly random order.
+  * Introduced -t parameter to prefix output with timestamps.
+  * Other minor improvements and bug fixes.
+
+ -- Paul Baker <paulb@feedburner.com>  Wed, 20 Sep 2006 17:45:20 -0500
+
+warsync (0.9.8+rc0.9.9+3) unstable; urgency=low
+
+  * This is version 0.9.9 Release-Candidate 3 and new features may not work
+    as expected.
+  * Dynamic client-side exclude support implemented with .warsyncignore files.
+  * Client-side pre, mod, and post command support implemented for filepacks.
+    Pre commands run on the client prior to syncing. Mod commands run after
+    syncing only if modifications were made. Post commands run after syncing
+    even if no modifications were made.
+  * Warsync event tracking implemented so multiple server processes will not
+    try to perform the same operation on a client.
+  * If the installed version of rsync supports it (v2.6+), rsync process will be
+    restarted when files disappear from the server during rsync instead of
+    causing an error.
+  * If running rsync v2.6.4 or higher, files will be deleted from the client
+    incrementally (using --delete-during rsync option) instead of at the
+    beginning of the rsync process. This will speed up the rsync process. See
+    documentation for reverting back to old behavior.
+  * Server will no longer replicate all clients if a non-existant client is
+    specified on the command line.
+  * When adding new clients to a server, user is asked if they want client to
+    be skipped by default when replicating all clients.
+  * Specifying RSYNC_OPT options in a filepack actually works now.
+  * New filepack option DELETE when set to a false value, the filepack will not
+    delete files from the warsync client that do not exist on the server.
+  * New filepack option SKIP will cause a filepack to not be included when
+    running warsync --all-filepacks.
+  * Many minor improvments and bug fixes.
+
+ -- Paul Baker <paulb@feedburner.com>  Thu, 23 Feb 2006 13:53:29 -0800
+
+warsync (0.9.8) unstable; urgency=low
+
+  * Filepack replication introduced.
+  * Debian package snapshot improvements.
+  * Output improvments. -q and -v actually mean something along with special
+    handling when run from non-tty (such as cron).
+  * Real documentation! See warsync-howto manpage.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Mon, 10 May 2004 15:57:25 -0500
+
+warsync (0.9.7) unstable; urgency=low
+
+  * New Debian Package snapshot feature.
+  * Fairly substantial refactoring of code resulting in much less redundant
+    code.
+  * Significant speed improvment in calculating differences in packages
+    between client and server.
+  * More flexible "ini" style config file for server.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Sat, 27 Mar 2004 14:50:47 -0600
+
+warsync (0.9.6.2) unstable; urgency=low
+
+  * New method of purging packages from client that works when a package has
+    already been removed, but not purged.
+  * Improved debian/rules.
+  * Fixes to debian/copyright file.
+  * Numerous manpage improvements.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Fri, 13 Feb 2004 18:21:32 -0600
+
+warsync (0.9.6.1) unstable; urgency=low
+
+  * Forgot to install warsync-add-client and warsync-client-push.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Wed,  4 Feb 2004 09:07:02 -0600
+
+warsync (0.9.6) unstable; urgency=low
+
+  * First alpha release of Warsync.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Wed,  4 Feb 2004 08:55:09 -0600
+
+pfars (0.9.5) unstable; urgency=low
+
+  * new COMPRESS config option to enable compression between server
+    and client. disabled by default.
+  * new CIPHER config option to specify cipher used to encrypt
+    communication between server and client. blowfish used by
+    default.
+  * default location for client identity file changed to
+    /etc/pfars/private/id_dsa.
+  * more verbose output by default.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Sun, 1 Jun 2003 06:41:24 -0500
+
+pfars (0.9.4) unstable; urgency=low
+
+  * The "Operation Spirit (The Tyranny of Tradition)" Release.
+  * fixes mistake in documentation reported in sf.net bug#596736.
+  * implements new .pfarsignore file support. disabled by default.
+  * finally fixed restart when pfars is updated during replication.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Tue, 24 Sep 2002 11:06:35 -0500
+
+pfars (0.9.3) unstable; urgency=low
+
+  * The "Sympathy" Release.
+  * actually make the init-files.local and files.local files useful.
+  * new packages.local file for overriding installed debian packages.
+  * improved default init-files config file to fix bugs and include
+    /etc/apt/sources.list.
+  * corrected debian/rules binary-* targets.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Sun, 11 Aug 2002 23:01:18 -0500
+
+pfars (0.9.2.2) unstable; urgency=low
+
+  * The "Don't Let Me Down" Release.
+  * how about we install that dandy little cronjob file included
+    in the package.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Thu, 18 Jul 2002 06:23:59 -0500
+
+pfars (0.9.2.1) unstable; urgency=low
+
+  * The "Inspection Wise 1999" Release.
+  * fixed log file output.
+  * hopeful fix for restart failure on pfars upgrade.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Thu, 18 Jul 2002 05:54:59 -0500
+
+pfars (0.9.2) unstable; urgency=low
+
+  * The "Campfire Kansas" Release.
+  * pfars-server --client parameter used for client logging.
+  * pfars-slave-install output dramatically improved.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Thu, 18 Jul 2002 05:05:59 -0500
+
+pfars (0.9.1) unstable; urgency=medium
+
+  * The "stupid is as stupid does" Release.
+  * pfars-server shouldn't die out of the box.
+  * make initialization actually work now.
+  * runaway restart loop detection.
+  * cronjob to run pfars daily.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Thu, 18 Jul 2002 04:16:59 -0500
+
+pfars (0.9) unstable; urgency=medium
+
+  * The "we just might have something here" Release.
+  * removed perl 5.6isms in order to make pfars compatible
+    with perl 5.005.
+  * reworked debian/rules and depends so pfars can run on potato.
+  * refactored much of the pfars code into PFARS module.
+  * new pfars-slave-install script for automatically configuring
+    a slave from the pfars master.
+  * new pfars-server engine that gives better server side control
+    of what is happening.
+  * only one client side ssh key is needed instead of three.
+  * default config files are included!!
+  * pipes to external commands are now done safely.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Tue, 16 Jul 2002 19:10:38 -0500
+
+pfars (0.8) unstable; urgency=low
+
+  * Initial public release.
+
+ -- Paul Baker (w2gi) <pbaker@where2getit.com>  Thu, 30 May 2002 20:03:40 -0500
+
+Local variables:
+mode: debian-changelog
+End:

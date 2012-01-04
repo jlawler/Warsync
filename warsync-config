@@ -1,0 +1,839 @@
+#!/usr/bin/perl -T
+
+##############################################################################
+## warsync-config - Warsync Config Script                                   ##
+##                                                                          ##
+## Copyright (C) 2001-2006 Paul J. Baker                                    ##
+##                                                                          ##
+## This program is free software; you can redistribute it and/or modify     ##
+## it under the terms of the GNU General Public License version 2 as        ##
+## published by the Free Software Foundation.                               ##
+##                                                                          ##
+## This program is distributed in the hope that it will be useful,          ##
+## but WITHOUT ANY WARRANTY; without even the implied warranty of           ##
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            ##
+## GNU General Public License for more details.                             ##
+##                                                                          ##
+## You should have received a copy of the GNU General Public License        ##
+## along with this program; if not, write to the Free Software              ##
+## Foundation, Inc., 59 Temple Place - Suite 330, Boston,                   ##
+## MA 02111-1307, USA.                                                      ##
+##                                                                          ##
+## You may contact the author via electronic mail at warsync@paulbaker.net  ##
+##############################################################################
+
+## $Id: warsync-config 173 2006-09-06 22:58:57Z pbaker-guest $
+
+=head1 NAME
+
+B<warsync-config> - Warsync Configuration and Setup Program
+
+=head1 SYNOPSIS
+
+B<warsync-config> S<[options]>
+
+ Options:
+  --client   configure as client
+  --server   configure as server
+  --version  display version number
+  --help     display help message
+
+
+=head1 DESCRIPTION
+
+B<warsync-config> asks a series of questions, and configures the system
+accordingly. This program is used to configure both the server and the
+client by specifying --server or --client on the command line respectively.
+
+=head1 COMMAND SWITCHES
+
+=over 4
+
+=item B<--client>
+
+Configure machine as a Warsync Client. This is the default.
+
+=item B<--server>
+
+Configure machine as a Warsync Server. If B<--server> is not specified,
+the system will be configured as a Warsync Client by default.
+
+=item B<--auto>
+
+Auto-configure using pre-existing config files.
+
+=item B<--version>
+
+Displays the B<warsync> version number and exits.
+
+=item B<--help>
+
+Display help message.
+
+=back
+
+=head1 FILES
+
+=over 4
+
+=item F</etc/warsync/client.conf>
+
+Warsync client config file.
+
+=item F</etc/warsync/client-key>
+=item F</etc/warsync/client-key.pub>
+
+Private and public SSH keys used by Warsync client to initiate
+communication with a Warsync server.
+
+=item F</etc/warsync/server.conf>
+
+Warsync server config file.
+
+=item F</etc/warsync/server-key>
+=item F</etc/warsync/server-key.pub>
+
+Private and public SSH keys used by Warsync server to initiate
+communication with a Warsync client.
+
+=item F</etc/ssh/sshd_config>
+=item F</root/.ssh/authorized_keys>
+=item F</root/.ssh/known_hosts>
+
+SSH config and key management files that may be modified during the
+configuration of a Warsync client or server.
+
+=back
+
+=head1 SEE ALSO
+
+warsync(8), warsync-add-client(8)
+
+=head1 AUTHOR
+
+Paul Baker, pbaker@where2getit.com
+
+=cut
+
+## $Id: warsync-config 173 2006-09-06 22:58:57Z pbaker-guest $
+
+## PFARS INSTALL SCRIPT
+
+use strict;
+use warnings;
+
+$ENV{PATH} = '/usr/bin:/bin:/usr/sbin:/sbin';
+
+use Getopt::Long;
+use Sys::Hostname;
+use Pod::Usage;
+
+use Warsync::Util;
+
+## make sure umask is correct.
+umask 022;
+
+## autoflush everything
+$| = 1;
+
+## fetch command line options.
+my %option = ();
+## set option defaults.
+Getopt::Long::Configure("bundling");
+
+Getopt::Long::GetOptions(
+    \%option,
+    'help|H|?',
+    'man',
+    'version|V',
+    'v|verbose+',
+    'q|quiet',
+    'n|dry-run',
+    'server',
+    'client',
+    'auto',
+) or pod2usage(2);
+
+pod2usage(1) if $option{help};
+pod2usage(-exitstatus => 0, -verbose => 2) if $option{man};
+
+# display version number if --version set.
+if ($option{version}) {
+    print STDERR version;
+    exit;
+}
+
+$Warsync::Util::NoPrompt = $option{auto} || 0;
+
+print "## Warsync Configuration ###########################################\n\n";
+
+unless ( -e "/etc/warsync" ) {
+    unless ( -w '/etc' ) {
+        fault("warsync-config requires write access to /etc. You should run this as root.");
+    }
+    mkdir "/etc/warsync";
+}
+
+unless ( -w "/etc/warsync" ) {
+    fault("warsync-config requires write access to /etc/warsync. You should run this as root.");
+}
+
+if ($option{server} and not $option{client}) {
+
+    my $begin = <<EOF;
+This program will now configure this system as a Warsync Server.  If you need to configure this system as a Warsync Client, please hit Ctrl+C now and run warsync-config again without specifying the --server argument on the command line.
+
+If you are ready to configure this system as a Warsync Server,
+EOF
+
+    prompt(
+        prompt => $begin,
+        default => 'press enter'
+    );
+
+    do_server_config();
+}
+
+else {
+
+    my $begin = <<EOF;
+This program will now configure this system as a Warsync Client.  If you need to configure this system as a Warsync Server, please hit Ctrl+C now and specify the --server argument on the command line.
+
+If you are ready to configure this system as a Warsync Client,
+EOF
+
+    prompt(
+        prompt => $begin,
+        default => 'press enter'
+    );
+
+    do_client_config();
+}
+
+exit;
+
+## SSHD_CONFIG STUFF ##############
+
+sub do_write_sshd_config
+{
+    my ($lines) = @_;
+
+    my $sshd_config;
+    open($sshd_config, "> /etc/ssh/sshd_config")
+        or open($sshd_config, "> /etc/sshd_config")
+            or fault("could not write /etc/ssh/sshd_config: $!");
+
+    print $sshd_config @$lines;
+
+    close($sshd_config);
+
+    my $restart_sshd = <<EOF;
+
+The sshd daemon must be restarted for this change to take affect.  Restarting sshd will not affect current ssh connections, so you can do this even if you are currently connected over ssh right now.
+
+Would you like sshd to be restarted right now?
+EOF
+
+    my $res = prompt(
+        prompt => $restart_sshd,
+        choices => [ 'y', 'n' ],
+    );
+
+    if ($res eq 'y') {
+        system("/etc/init.d/ssh", 'restart')
+            and fault("could not restart ssh: $!");
+    }
+    else {
+        print <<EOF;
+
+Warsync configuration can not continue until sshd is restarted.  Please start sshd manually and then run warsync-config again.
+EOF
+
+        exit;
+    }
+}
+
+####################################
+
+sub do_permit_root_is_no
+{
+    my ($lines, $i) = @_;
+    my $permit_root_is_no = <<EOF;
+
+Warsync uses ssh as the communication transport between server and client.  Ssh is a very secure coummications protocol which you may already be familiar with. In order for Warsync to work properly over ssh it needs to be able to login as root on the client and server to execute specific commands. Warsync does this in a secure manner by using public key authentication that triggers only specifically allowed commands to be run so that this does not pose a security threat.
+
+You currently have ssh daemon on this server configured to NOT allow root to login under any circumstances. Warsync is not able to work if it can not communicate over ssh as root. You can safely allow Warsync to login as root as needed without allowing other unwanted access as root. This is done be configuring sshd to only allow root login using public key authentication, but only when the command option has been specified for the key. This is done by setting the PermitRootLogin option to 'forced-commands-only'.
+
+Warsync can configure sshd to allow forced commands for root. Would you like Warsync to configure sshd this way now?
+EOF
+
+    my $res = prompt(
+        prompt => $permit_root_is_no,
+        choices => [ 'n', 'y' ]
+    );
+
+    if ($res eq 'y') {
+        $lines->[$i] = "# PermitRootLogin forced-commands-only is required by Warsync\n"
+                   . "PermitRootLogin forced-commands-only\n";
+        do_write_sshd_config($lines);
+        return 1;
+    }
+
+    print <<EOF;
+
+Warsync can not continue unless sshd allows root to login with forced-commands-only. Please configure sshd manually with:
+
+  PermitRootLogin forced-commands-only
+
+You may then run warsync-config again to continue with Warsync configuration.
+EOF
+    exit;
+}
+
+#####################################
+
+sub do_permit_root_is_yes
+{
+    my ($lines, $i) = @_;
+    my $permit_root_is_yes = <<EOF;
+
+Warsync uses ssh as the communication transport between server and client. Ssh is a very secure coummications protocol which you may already be familiar with. In order for Warsync to work properly over ssh it needs to be able to login as root on the client and server to execute specific commands. Warsync does this in a secure manner by using public key authentication that triggers only specifically allowed commands to be run so that this does not pose a security threat.
+
+You currently have ssh daemon on this server configured to allow root to login using a password. This allows anyone in the world to login to your server as root if they know or can guess the root password.  It is possible to disable root access with a password and allow Warsync to continue to function. It is recommended that you configure your ssh server so that root is only allowed to login via public key authentication with forced commands. This will fully tighten security on this system and still allow Warsync to run properly. Would you like Warsync to configure your ssh server appropriately? If you say yes, you will no longer be able to login to this system as root with the root password over ssh. You will still be able to login as root from the console or by logging in as regular user and using the su command to switch to root.
+
+Configure sshd to only allow forced-commands for root?
+EOF
+
+    my $res = prompt(
+        prompt => $permit_root_is_yes,
+        choices => [ 'n', 'y' ]
+    );
+
+    if ($res eq 'y') {
+        $lines->[$i] = "# PermitRootLogin forced-commands-only is required by Warsync\n"
+                   . "PermitRootLogin forced-commands-only\n";
+        do_write_sshd_config($lines);
+    }
+
+    return 1;
+}
+
+####################################
+
+sub do_privilege_separation
+{
+    my ($lines, $i) = @_;
+    my $priv_sep_is_yes = <<EOF;
+
+Warsync uses ssh as the communication transport between server and client.  Ssh is a very secure coummications protocol which you may already be familiar with. In order for Warsync to work properly over ssh it needs to be able to login as root on the client and server to execute specific commands. Unfortuneately there is a bug in OpenSSH versions prior to 3.6 that causes root forced-commands to fail when the privilege separation feature is turned on. You currently have privilege separation turned on for the ssh daemon on this system. You either need to turn off privilege separation, or upgrade to OpenSSH 3.6 or later.
+
+Warsync can configure sshd to not use privilege separation. Would you like Warsync to configure sshd this way now?
+EOF
+
+    my $res = prompt(
+        prompt => $priv_sep_is_yes,
+        choices => [ 'n', 'y' ]
+    );
+
+    if ($res eq 'y') {
+        $lines->[$i] = <<EOF;
+# Privilege separation is turned off because there exists a bug in OpenSSH
+# versions prior to 3.6 that causes root forced-commands to fail when
+# privilege separation is turned on. Warsync needs to use root forced-
+# commands to comunicate.
+UsePrivilegeSeparation no
+EOF
+        do_write_sshd_config($lines);
+        return 1;
+    }
+
+    print <<EOF;
+
+Warsync can not continue until privilege separation is turned off, or OpenSSH is upgraded to version 3.6 or later. You may manually turn off privilege separation by adding the following line to your sshd_config file:
+
+  UsePrivilegeSeparation no
+
+You may then run warsync-config again to continue with Warsync configuration.
+EOF
+    exit;
+}
+
+######################################
+
+sub do_sshd_config_check
+{
+    ## read sshd_config and check that root is allowed
+    ## for forced command.
+    my $sshd_config;
+    open($sshd_config, "/etc/ssh/sshd_config")
+        or open($sshd_config, "/etc/sshd_config")
+            or fault("could not read /etc/ssh/sshd_config: $!\n"
+                . "Warsync requires an SSH daemon to be running.");
+
+    ## read the config into memory.
+    my @lines = <$sshd_config>;
+
+    close($sshd_config);
+
+    my $permit_root = 0;
+    ## check that PermitRootLogin is correct.
+    for (my $i = 0; $i < @lines; ++$i) {
+        ## look for the option
+        if (my ($set) = $lines[$i] =~ /^\s*PermitRootLogin\s+(\S+)/) {
+
+            ## forced-commands-only is good.
+            ## without-password is okay.
+            if ($set eq 'forced-commands-only'
+                    || $set eq 'without-password')
+            {
+                $permit_root = 1;
+            }
+
+            ## if root login via password is allowed
+            ## this is dangerous, so lets ask if we should tighten
+            ## up security for them.
+            elsif ($set eq 'yes') {
+                do_permit_root_is_yes(\@lines, $i);
+                $permit_root = 1;
+            }
+
+            ## root login is not permitted
+            else {
+                do_permit_root_is_no(\@lines, $i);
+                $permit_root = 1;
+            }
+
+        }
+    }
+
+    ## no PermitRootLogin option exists. need to set it.
+    unless ($permit_root) {
+        do_permit_root_is_no(\@lines, scalar(@lines));
+    }
+
+    ## now check for AllowUsers and make sure root is
+    ## in the list.
+    for (my $i = 0; $i < @lines; ++$i) {
+        ## look for the option
+        if (my ($set) = $lines[$i] =~ /^\s*AllowUsers\s(.*)/) {
+
+            ## AllowUsers does exist. check if root is missing.
+            if ($set !~ /\broot\b/) {
+                my $allow_users = <<EOF;
+
+Warsync uses ssh as the communication transport between server and client.  Ssh is a very secure coummications protocol which you may already be familiar with. In order for Warsync to work properly over ssh it needs to be able to login as root on the client and server to execute specific commands. Warsync does this in a secure manner by using public key authentication that triggers only specifically allowed commands to be run so that this does not pose a security threat.
+
+You have specified that only particular users are allowed to login to the ssh ssh daemon on this system using the 'AllowUsers' option.  The AllowUsers option does not list root as an allowed user. Warsync will not be able to function without access through ssh as root.
+
+Would you like Warsync to add root to AllowUsers option?
+EOF
+
+                my $res = prompt(
+                    prompt => $allow_users,
+                    choices => [ 'n', 'y' ]
+                );
+
+                if ($res eq 'y') {
+                    ## truncate trailing whitespace.
+                    $lines[$i] =~ s/\s+$//g;
+                    ## add root.
+                    $lines[$i] .= " root\n";
+
+                    do_write_sshd_config(\@lines);
+                }
+                else {
+                    print <<EOF;
+
+Warsync can not continue unless sshd allows root to login.  Please manually add 'root' to the 'AllowUsers' option for sshd.
+
+You may then run warsync-config again to continue with Warsync configuration.
+EOF
+                    exit;
+
+                }
+            } ## endif AllowUsers missing root
+
+        } ## endif AllowUsers option found.
+
+    } ## endfor @lines
+
+    ## now check for that PrivilegeSeperation is turned off
+    ## on ssh version before 3.6.
+    my ($ssh_ver) = `ssh -V 2>&1` =~ /^OpenSSH_(\d+.\d+)/;
+    return if $ssh_ver >= 3.6;
+
+    my $priv_sep = 1;
+    ## check that PermitRootLogin is correct.
+    for (my $i = 0; $i < @lines; ++$i) {
+        ## look for the option
+        if (my ($set) = $lines[$i] =~ /^\s*UsePrivilegeSeparation\s+(\S+)/) {
+            ## privilege separation is off, hurray!
+            if ($set eq 'no') {
+                $priv_sep = 0;
+            }
+            else {
+                do_privilege_separation(\@lines, $i);
+                $priv_sep = 0;
+            }
+        }
+    } ## end for @lines
+
+    ## UsePrivilegeSeparation defaults to yes. needs to be no.
+    if ($priv_sep) {
+        do_privilege_separation(\@lines, scalar(@lines));
+    }
+
+} ## endsub do_sshd_config_check
+
+
+## SERVER CONFIG ##################
+
+sub do_server_key
+{
+
+    my $create_server_key = 1;
+
+    if (-e "/etc/warsync/server-key") {
+
+        my $previous_server_key = <<EOF;
+
+An existing server key has been detected. Do you want to keep this key?
+EOF
+
+        my $res = prompt(
+            prompt => $previous_server_key,
+            choices => [ 'y', 'n' ],
+        );
+
+        if ($res eq 'y') {
+            print "\nKeeping existing server key.\n";
+            $create_server_key = 0;
+        }
+    }
+
+    if ($create_server_key) {
+        print "\nGenerating server authentication key...";
+        system('ssh-keygen', '-q', '-t', 'dsa', '-N', '',
+               '-f', "/etc/warsync/server-key")
+            and fault("could not create server key.");
+        print "done.\n";
+    }
+}
+
+sub do_server_config
+{
+
+    do_sshd_config_check();
+
+    do_server_key();
+
+    #do_server_cron();
+
+    system('touch', "/etc/warsync/server.conf")
+        and fault("could not touch /etc/warsync/server.conf: $!");
+
+    print <<EOF;
+
+This system has now been configured as a Warsync server. Next you will need configure Warsync clients, and specify what filepacks (lists of files and directories) should be replicated when warsync runs. Filepacks are specified in the /etc/warsync/filepacks.d directory.
+
+Read the warsync man page for more information.
+EOF
+
+}
+
+
+## CLIENT CONFIG #################
+
+sub ask_server_hostname
+{
+    my $server = shift || '';
+
+    my $what_server = <<EOF;
+
+What is the hostname or IP address of the Warsync server you would like this client to replicate from?
+EOF
+
+    my $unsafe = prompt(
+        prompt  => $what_server,
+        default => $server,
+    );
+
+    my ($hostname) = is_fqdn($unsafe);
+
+    return $hostname;
+}
+
+
+sub ask_server_port
+{
+    my $in = shift || 22;
+
+    my $what_port = <<EOF;
+
+What is the port of the SSH server running on the Warsync server? Usually this is port 22.
+EOF
+
+    my $unsafe = prompt(
+        prompt  => $what_port,
+        default => $in,
+    );
+
+    my ($port) = $unsafe =~ /(\d+)/;
+
+    return $port;
+}
+
+sub ask_user
+{
+    my $user = shift || $ENV{'SUDO_USER'} || '';
+
+    my $what_user = <<EOF;
+
+warsync-config needs to connect to the server over ssh to download the necessary config information from the server. Since this Warsync client is not yet authenticated with the server, it will need to connect as an ordinary user over ssh. What user should warsync-config use to login to the server over ssh as?
+EOF
+
+    my $unsafe = prompt(
+        prompt  => $what_user,
+        default => $user,
+    );
+
+    my ($username) = $unsafe =~ /([a-z][-0-9A-Za-z]*[0-9A-Za-z])/;
+
+    return $username;
+}
+
+sub do_convert_pfarsignore
+{
+    ## notice I am grabbing all directories in addition
+    ## to the ignore files. this way we will get some
+    ## data even when we aren't finding pfarsignore files.
+    ## so that every so often we can output a . so people
+    ## know we aren't stalled.
+
+    print "Converting .pfarsignore files to .warsyncignore: ";
+    my @find = qw( find / -type d -o -name .pfarsignore );
+    open(my $find_h, '-|') || exec( @find )
+        or die "error '$!' trying to exec: @find";
+    my $hit = 0;
+    while (my $file = <$find_h>) {
+        chomp($file);
+        unless (++$hit % 1500) {
+            print '.';
+        }
+        if (my ($dir) = $file =~ m{^(/.*)/\.pfarsignore$}) {
+            ## found pfarsignore file. check for previously
+            ## existing .warsyncignore file.
+            if (-e "$dir/.warsyncignore") {
+                print '!';
+            }
+            else {
+                system('mv', "$dir/.pfarsignore", "$dir/.warsyncignore");
+                print '+';
+            }
+        }
+    }
+
+    close($find_h) or die "find returned error status: $?";
+
+    print "done.";
+}
+
+sub ask_warsyncignore
+{
+    my $ask_warsyncignore = <<EOF;
+
+Warsync clients can be configured to check for .warsyncignore files throughout the file system and when one is encountered this will cause warsync to ignore the directory or particular files in the directory when replicating. This allows users to temporarily specify that a directory should not be replicated because they have made changes and may still be in the process of testing the changes. This comes in very handy if for instance you want to have a development server that is keep in-sync with a production master server, but from time to time you need to make and test changes that should not be wiped out during the next replication cycle. Once the .warsyncignore file is removed, the files will be replicated as normal the next time a replication cycle runs. For more information, read the warsyncignore man page.
+
+Would you like to enable support for .warsyncignore files?
+EOF
+
+    my $warsyncignore = prompt(
+        prompt => $ask_warsyncignore,
+        choices => [ 'n', 'y' ]
+    );
+
+    if ($warsyncignore eq 'y') {
+
+        my $ask_pfarsignore = <<EOF;
+
+You have enabled .warsyncignore files. If you are upgrading to Warsync from PFARS and were previously using .pfarsignore files, warsync-config can convert your existing .pfarsignore files to .warsyncignore files right now. This can take several minutes to complete.
+
+Would you like warsync-config to convert your .pfarsignore files to .warsyncignore files? If you don't know what this is, you can safely say no.
+EOF
+
+        my $check_pfarsignore = prompt(
+            prompt => $ask_pfarsignore,
+            choices => [ 'n', 'y' ]
+        );
+
+        do_convert_pfarsignore if $check_pfarsignore eq 'y';
+    }
+
+    return $warsyncignore;
+}
+
+sub do_client_key
+{
+
+    my $create_client_key = 1;
+
+    if (-e "/etc/warsync/client-key") {
+
+        my $previous_client_key = <<EOF;
+
+A existing client key has been detected. Do you want to keep this key?
+EOF
+
+        my $res = prompt(
+            prompt => $previous_client_key,
+            choices => [ 'y', 'n' ],
+        );
+
+        if ($res eq 'y') {
+            print "\nKeeping existing client key.\n";
+            $create_client_key = 0;
+        }
+    }
+
+    if ($create_client_key) {
+        print "\nGenerating client authentication key...";
+        system('ssh-keygen', '-q', '-t', 'dsa', '-N', '',
+               '-f', "/etc/warsync/client-key")
+            and fault("could not create client key.");
+        print "done.\n";
+    }
+}
+
+sub do_client_config
+{
+
+    do_sshd_config_check();
+
+    my ($server, $port, $user, $server_public_key);
+
+    ## if auto, only generate client key.
+    if ($option{auto}) {
+        do_client_key();
+        return;
+    }
+
+    for (;;) {
+
+        $server = ask_server_hostname($server);
+        $port   = ask_server_port($port);
+        $user   = ask_user($user);
+
+        my @fetch = ( 'ssh', '-p', $port, "$user\@$server",
+                      'echo connected && cat', "/etc/warsync/server-key.pub" );
+        open(my $ssh_h, '-|') || exec( @fetch )
+            or die "error '$!' trying to exec: @fetch";
+
+        my @scom = <$ssh_h>;
+
+        close($ssh_h);
+
+        my $ask_again = '';
+
+        ## check if we got the key.
+        if (@scom == 2 and $scom[1] =~ /^ssh-dss/) {
+            $server_public_key = $scom[1];
+            last;
+        }
+        ## check if we connected, but couldn't get the key.
+        elsif (@scom == 1 and $scom[0] =~ /^connected/) {
+            $ask_again = <<EOF;
+
+Warsync was able to establish communication with $server, but it does not appear to be a Warsync Server.
+
+Would you like to try again using a different hostname or user value?
+EOF
+        }
+        ## otherwise no connection was made.
+        else {
+            $ask_again = <<EOF;
+
+Warsync was not able to establish communication with $server. Either the specified hostname or username is invalid.
+
+Would you like to try again using different values?
+EOF
+        }
+
+        my $res = prompt(
+            prompt  => $ask_again,
+            choices => [ 'y', 'n' ],
+        );
+
+        if ($res eq 'n') {
+            print <<EOF;
+
+Warsync was unable to communicate with the server. Please try running warsync-config again later.
+EOF
+            exit;
+        }
+
+    } ## endfor
+
+    #my $compress      = ask_compress();
+    #my $warsyncignore = ask_warsyncignore();
+
+    print "\nConfiguring client...";
+
+    ## write client config file.
+    open(my $conf, "> /etc/warsync/client.conf")
+        or fault("could not write /etc/warsync/client.conf: $!");
+
+    print $conf <<EOF;
+## SERVER - hostname or IP address of server
+SERVER = $server
+
+## PORT - server ssh port
+PORT   = $port
+
+EOF
+
+    close($conf);
+
+    ## now add server key to authorized_keys.
+    my @ak_lines = ();
+    ## first read in the existing authorized_keys.
+    if (-e "/root/.ssh/authorized_keys") {
+        open(my $ak, '/root/.ssh/authorized_keys')
+            or fault("could not read /root/.ssh/authorized_keys: $!");
+        @ak_lines = <$ak>;
+        close($ak);
+
+        ## remove existing warsync-client-push lines.
+        @ak_lines = grep(!/warsync-client-push/, @ak_lines);
+
+        ## remove lines that have matching key.
+        @ak_lines = grep(!/\Q$server_public_key\E/, @ak_lines);
+    }
+
+    open(my $ak, '> /root/.ssh/authorized_keys')
+        or fault("could not write /root/.ssh/authorized_keys: $!");
+
+    print $ak @ak_lines;
+
+    print $ak <<EOF;
+# warsync-client-push command is used for Warsync client
+command="/usr/sbin/warsync-client-push",no-port-forwarding,no-X11-forwarding,no-agent-forwarding $server_public_key
+EOF
+
+    close($ak);
+
+    print "done.";
+
+    ## now create client authentication key.
+    do_client_key();
+
+    my $host = hostname;
+
+    print <<EOF;
+
+This system is now configured as a Warsync client. To enable replication with this client, you must add this system to the server's client list. Do this by running the following command as root on the server:
+
+  warsync-add-client $host
+
+EOF
+
+}
