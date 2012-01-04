@@ -17,6 +17,8 @@ WriteMakefile(
         'Carp'           => 0,
     },
     'DISTNAME' => 'warsync',
+    'INSTALLVENDORSCRIPT' => 'debian/warsync/usr/sbin',
+    'INSTALLVENDORBIN'    => 'debian/warsync/usr/sbin'
 
 );
 
