@@ -155,10 +155,10 @@ sub parse_package_list ($)
 
         if (my @pkg = $line =~
                 /^
-                (...) \s+              ## 0 - desired state
-                ([-a-z0-9+.]+) \s+     ## 1 - package
-                ([-.0-9+a-zA-Z:]+) \s+ ## 2 - version
-                (\S.*)                 ## 3 - description
+                (...) \s+                ## 0 - desired state
+                ([-a-z0-9+.]+) \s+       ## 1 - package
+                ([-.0-9+a-zA-Z:~]+) \s+  ## 2 - version
+                (\S.*)                   ## 3 - description
                 /x)
         {
             $packages{$pkg[1]} = \@pkg;
