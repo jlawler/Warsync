@@ -1,3 +1,17 @@
+warsync (0.9.9~bayru2) unstable; urgency=low
+
+  * Fix install path
+
+ -- jlawler <jlawler@morgoth.crazygeek.org>  Wed, 04 Jan 2012 01:26:58 -0600
+
+warsync (0.9.9~bayru1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Some debian packages have a ~ in the version string
+  * Perl's File::Temp might return _ in the filename
+
+ -- jlawler <jlawler@morgoth.crazygeek.org>  Wed, 04 Jan 2012 01:03:27 -0600
+
 warsync (0.9.8+rc0.9.9+4) unstable; urgency=low
 
   * This is version 0.9.9 Release-Candidate 4 and new features may not work as

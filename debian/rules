@@ -53,7 +53,7 @@ install: build
 	dh_installdirs
 
 	$(MAKE) install PREFIX=$(CURDIR)/debian/warsync/usr DESTINSTALLBIN=$(CURDIR)/debian/warsync/usr/sbin DESTINSTALLSCRIPT=$(CURDIR)/debian/warsync/usr/sbin
-
+	mv $(CURDIR)/debian/warsync/usr/bin/* $(CURDIR)/debian/warsync/usr/sbin/
 
 # Build architecture-dependent files here.
 binary-arch: build install
